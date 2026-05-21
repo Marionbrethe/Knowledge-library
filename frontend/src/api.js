@@ -54,6 +54,13 @@ export const createNote = (docId, data) =>
     body: JSON.stringify(data),
   }).then(handle)
 
+export const updateCategory = (id, data) =>
+  fetch(`${BASE}/categories/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }).then(handle)
+
 export const queryLibrary = (data) =>
   fetch(`${BASE}/query`, {
     method: 'POST',

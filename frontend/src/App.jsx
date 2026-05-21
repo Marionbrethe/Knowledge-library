@@ -7,9 +7,10 @@ import DetailPanel from './components/DetailPanel'
 import AddDocumentModal from './components/AddDocumentModal'
 import BulkImportModal from './components/BulkImportModal'
 import AskTab from './components/AskTab'
+import CategoriesTab from './components/CategoriesTab'
 
-const TABS = ['library', 'ask', 'explore']
-const TAB_LABELS = { library: 'Library', ask: 'Ask', explore: 'Explore' }
+const TABS = ['library', 'ask', 'categories', 'explore']
+const TAB_LABELS = { library: 'Library', ask: 'Ask', categories: 'Categories', explore: 'Explore' }
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('library')
@@ -86,6 +87,11 @@ export default function App() {
   const handleCategoryCreated = useCallback((cat) => {
     const setter = cat.type === 'topic' ? setTopicCategories : setUseCaseCategories
     setter((prev) => [...prev, cat].sort((a, b) => a.name.localeCompare(b.name)))
+  }, [])
+
+  const handleCategoryUpdated = useCallback((cat) => {
+    const setter = cat.type === 'topic' ? setTopicCategories : setUseCaseCategories
+    setter((prev) => prev.map((c) => (c.id === cat.id ? cat : c)))
   }, [])
 
   const filteredDocs = useMemo(() => {
@@ -246,6 +252,14 @@ export default function App() {
         <AskTab
           documents={documents}
           onDocumentSelect={setSelectedDoc}
+        />
+      )}
+
+      {activeTab === 'categories' && (
+        <CategoriesTab
+          topicCategories={topicCategories}
+          useCaseCategories={useCaseCategories}
+          onCategoryUpdated={handleCategoryUpdated}
         />
       )}
 
