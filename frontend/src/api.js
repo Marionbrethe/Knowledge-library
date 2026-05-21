@@ -61,6 +61,16 @@ export const updateCategory = (id, data) =>
     body: JSON.stringify(data),
   }).then(handle)
 
+export const exploreDocument = (id) =>
+  fetch(`${BASE}/documents/${id}/explore`, { method: 'POST' }).then(handle)
+
+export const addFromSuggestion = (data) =>
+  fetch(`${BASE}/documents/from-suggestion`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }).then(handle)
+
 export const queryLibrary = (data) =>
   fetch(`${BASE}/query`, {
     method: 'POST',

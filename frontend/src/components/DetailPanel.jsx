@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { getNotes, createNote } from '../api'
+import { useEffect, useState, useCallback } from 'react'
+import { getNotes, createNote, exploreDocument, addFromSuggestion } from '../api'
 import { formatDate, scoreBadgeClass } from '../utils'
 
 function Section({ title, children }) {
@@ -13,7 +13,6 @@ function Section({ title, children }) {
   )
 }
 
-// Shared component for both notes and team questions
 function NoteSection({ docId, title, isQuestion, items, onItemAdded }) {
   const [content, setContent] = useState('')
   const [name, setName] = useState('')
@@ -27,7 +26,6 @@ function NoteSection({ docId, title, isQuestion, items, onItemAdded }) {
 
     setError(null)
 
-    // Optimistic update — add a temporary entry immediately
     const tempId = `temp-${Date.now()}`
     const optimistic = {
       id: tempId,
@@ -49,10 +47,8 @@ function NoteSection({ docId, title, isQuestion, items, onItemAdded }) {
         added_by: savedName.trim(),
         is_question: isQuestion,
       })
-      // Replace the optimistic entry with the real one
       onItemAdded(real, isQuestion, tempId)
     } catch (err) {
-      // Roll back the optimistic entry and restore the form
       onItemAdded(null, isQuestion, tempId)
       setContent(savedContent)
       setError(err.message || 'Failed to save. Please try again.')
@@ -63,7 +59,6 @@ function NoteSection({ docId, title, isQuestion, items, onItemAdded }) {
 
   return (
     <Section title={title}>
-      {/* Existing items */}
       {items.length > 0 && (
         <div className="space-y-2 mb-3">
           {items.map((item) => (
@@ -82,7 +77,6 @@ function NoteSection({ docId, title, isQuestion, items, onItemAdded }) {
         </div>
       )}
 
-      {/* Add form */}
       <form onSubmit={handleSubmit} className="space-y-2">
         <textarea
           value={content}
@@ -116,7 +110,174 @@ function NoteSection({ docId, title, isQuestion, items, onItemAdded }) {
   )
 }
 
-export default function DetailPanel({ doc, onClose }) {
+const TYPE_STYLES = {
+  'same-topic':  'bg-blue-50 text-blue-700 border-blue-100',
+  'foundational': 'bg-amber-50 text-amber-700 border-amber-100',
+  'adjacent':    'bg-green-50 text-green-700 border-green-100',
+  'same-author': 'bg-violet-50 text-violet-700 border-violet-100',
+}
+
+const TYPE_LABELS = {
+  'same-topic':  'Same topic',
+  'foundational': 'Foundational',
+  'adjacent':    'Adjacent',
+  'same-author': 'Same author',
+}
+
+function SuggestionCard({ suggestion, sourceDocId, onAdded }) {
+  const [state, setState] = useState('idle') // 'idle' | 'adding' | 'added' | 'exists'
+
+  const handleAdd = useCallback(async () => {
+    setState('adding')
+    try {
+      const doc = await addFromSuggestion({
+        url: suggestion.url,
+        title: suggestion.title,
+        uploaded_by: 'team',
+        source_document_id: sourceDocId,
+      })
+      onAdded(doc)
+      setState('added')
+    } catch (err) {
+      if (err.status === 409) {
+        setState('exists')
+      } else {
+        setState('idle')
+      }
+    }
+  }, [suggestion, sourceDocId, onAdded])
+
+  const typeStyle = TYPE_STYLES[suggestion.type] || 'bg-gray-50 text-gray-600 border-gray-100'
+  const typeLabel = TYPE_LABELS[suggestion.type] || suggestion.type
+
+  return (
+    <div className="flex-shrink-0 w-64 bg-white border border-gray-100 rounded-xl p-4 shadow-sm
+      flex flex-col gap-2">
+      <div className="flex items-start justify-between gap-2">
+        <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border flex-shrink-0 ${typeStyle}`}>
+          {typeLabel}
+        </span>
+      </div>
+
+      <div className="flex-1">
+        <p className="text-sm font-medium text-gray-800 leading-snug line-clamp-2">
+          {suggestion.title}
+        </p>
+        <p className="text-xs text-gray-400 mt-1">
+          {suggestion.author && `${suggestion.author} · `}{suggestion.source}
+        </p>
+        <p className="text-xs text-gray-500 mt-2 leading-relaxed line-clamp-3">
+          {suggestion.rationale}
+        </p>
+      </div>
+
+      <div className="flex items-center gap-2 pt-1">
+        {suggestion.url && (
+          <a
+            href={suggestion.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-blue-600 hover:underline"
+          >
+            View →
+          </a>
+        )}
+        <button
+          onClick={handleAdd}
+          disabled={state !== 'idle'}
+          className={`ml-auto text-xs px-2.5 py-1 rounded-lg font-medium transition-colors
+            ${state === 'added' || state === 'exists'
+              ? 'bg-gray-100 text-gray-400 cursor-default'
+              : 'bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-50'
+            }`}
+        >
+          {state === 'adding' ? '…'
+            : state === 'added' ? 'Added ✓'
+            : state === 'exists' ? 'Already in library'
+            : '+ Add to library'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function ExploreSection({ doc, onDocumentAdded }) {
+  const [status, setStatus] = useState('idle') // 'idle' | 'loading' | 'done' | 'error'
+  const [suggestions, setSuggestions] = useState([])
+
+  const handleExplore = useCallback(async () => {
+    setStatus('loading')
+    setSuggestions([])
+    try {
+      const res = await exploreDocument(doc.id)
+      setSuggestions(res.suggestions || [])
+      setStatus('done')
+    } catch {
+      setStatus('error')
+    }
+  }, [doc.id])
+
+  if (status === 'idle') {
+    return (
+      <button
+        onClick={handleExplore}
+        className="w-full text-sm border border-gray-200 text-gray-600 bg-white
+          px-4 py-2.5 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-colors
+          flex items-center justify-center gap-1.5"
+      >
+        Explore more
+        <span className="text-gray-400">→</span>
+      </button>
+    )
+  }
+
+  if (status === 'loading') {
+    return (
+      <div className="flex items-center gap-2 text-sm text-gray-400 py-2">
+        <div className="w-4 h-4 border-2 border-gray-200 border-t-gray-500 rounded-full animate-spin flex-shrink-0" />
+        Finding related work…
+      </div>
+    )
+  }
+
+  if (status === 'error') {
+    return (
+      <div className="space-y-2">
+        <p className="text-sm text-red-500">Could not load suggestions. Please try again.</p>
+        <button onClick={handleExplore} className="text-xs text-gray-500 underline">Retry</button>
+      </div>
+    )
+  }
+
+  return (
+    <Section title="Explore more">
+      {suggestions.length === 0 ? (
+        <p className="text-sm text-gray-400">No suggestions found.</p>
+      ) : (
+        <div className="-mx-6 px-6">
+          <div className="flex gap-3 overflow-x-auto pb-3 scrollbar-hide">
+            {suggestions.map((s, i) => (
+              <SuggestionCard
+                key={i}
+                suggestion={s}
+                sourceDocId={doc.id}
+                onAdded={onDocumentAdded}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+      <button
+        onClick={handleExplore}
+        className="text-xs text-gray-400 hover:text-gray-600 mt-1 transition-colors"
+      >
+        Refresh suggestions
+      </button>
+    </Section>
+  )
+}
+
+export default function DetailPanel({ doc, documents, onClose, onDocumentAdded }) {
   const [noteItems, setNoteItems] = useState([])
   const [questionItems, setQuestionItems] = useState([])
 
@@ -134,19 +295,11 @@ export default function DetailPanel({ doc, onClose }) {
       .catch(() => {})
   }, [doc?.id, doc?.status])
 
-  // Handles optimistic adds and rollbacks for both lists
   const handleItemAdded = (item, isQuestion, replaceId) => {
     const setter = isQuestion ? setQuestionItems : setNoteItems
     setter((prev) => {
-      if (!item) {
-        // Rollback: remove the temp entry
-        return prev.filter((i) => i.id !== replaceId)
-      }
-      if (replaceId) {
-        // Replace temp with confirmed item from server
-        return prev.map((i) => (i.id === replaceId ? item : i))
-      }
-      // New optimistic entry
+      if (!item) return prev.filter((i) => i.id !== replaceId)
+      if (replaceId) return prev.map((i) => (i.id === replaceId ? item : i))
       return [...prev, item]
     })
   }
@@ -154,6 +307,11 @@ export default function DetailPanel({ doc, onClose }) {
   const topicChips = doc?.categories?.filter((c) => c.type === 'topic') ?? []
   const useCaseChips = doc?.categories?.filter((c) => c.type === 'use_case') ?? []
   const isPending = doc?.status === 'pending' || doc?.status === 'processing'
+
+  // Look up the source document for provenance note
+  const sourceDoc = doc?.source_document_id
+    ? (documents || []).find((d) => String(d.id) === String(doc.source_document_id))
+    : null
 
   return (
     <>
@@ -214,6 +372,24 @@ export default function DetailPanel({ doc, onClose }) {
               </div>
             ) : (
               <div className="px-6 py-5 space-y-6">
+                {/* Provenance note */}
+                {sourceDoc && (
+                  <div className="flex items-center gap-1.5 text-xs text-gray-400 bg-gray-50
+                    rounded-lg px-3 py-2 border border-gray-100">
+                    <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 110 20A10 10 0 0112 2z" />
+                    </svg>
+                    Discovered while reading{' '}
+                    <button
+                      className="font-medium text-gray-600 hover:text-gray-900 hover:underline truncate max-w-[200px]"
+                      onClick={() => onClose()}
+                    >
+                      {sourceDoc.title || sourceDoc.url || 'a document'}
+                    </button>
+                  </div>
+                )}
+
                 {/* Score */}
                 {doc.relevance_score != null && (
                   <div className="flex items-start gap-3">
@@ -286,6 +462,9 @@ export default function DetailPanel({ doc, onClose }) {
                   </Section>
                 )}
 
+                {/* Explore more */}
+                <ExploreSection doc={doc} onDocumentAdded={onDocumentAdded} />
+
                 {/* Team notes */}
                 <NoteSection
                   docId={doc.id}
@@ -303,15 +482,6 @@ export default function DetailPanel({ doc, onClose }) {
                   items={questionItems}
                   onItemAdded={handleItemAdded}
                 />
-
-                {/* Explore more placeholder */}
-                <button
-                  disabled
-                  className="w-full text-sm border border-gray-200 text-gray-400
-                    px-4 py-2.5 rounded-lg cursor-not-allowed"
-                >
-                  Explore more → (Phase 5)
-                </button>
 
                 <p className="text-xs text-gray-400 pb-2">
                   Added by {doc.uploaded_by} · {formatDate(doc.uploaded_at)}
