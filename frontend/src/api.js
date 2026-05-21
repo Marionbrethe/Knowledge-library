@@ -46,3 +46,10 @@ export const createCategory = (data) =>
 
 export const getNotes = (docId) =>
   fetch(`${BASE}/documents/${docId}/notes`).then(handle)
+
+export const createNote = (docId, data) =>
+  fetch(`${BASE}/documents/${docId}/notes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }).then(handle)

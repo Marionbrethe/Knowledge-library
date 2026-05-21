@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getNotes } from '../api'
+import { getNotes, createNote } from '../api'
 import { formatDate, scoreBadgeClass } from '../utils'
 
 function Section({ title, children }) {
@@ -13,18 +13,143 @@ function Section({ title, children }) {
   )
 }
 
+// Shared component for both notes and team questions
+function NoteSection({ docId, title, isQuestion, items, onItemAdded }) {
+  const [content, setContent] = useState('')
+  const [name, setName] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState(null)
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    if (!content.trim()) return
+    if (!name.trim()) { setError('Please enter your name.'); return }
+
+    setError(null)
+
+    // Optimistic update — add a temporary entry immediately
+    const tempId = `temp-${Date.now()}`
+    const optimistic = {
+      id: tempId,
+      content: content.trim(),
+      added_by: name.trim(),
+      added_at: new Date().toISOString(),
+      is_question: isQuestion,
+      _pending: true,
+    }
+    onItemAdded(optimistic, isQuestion)
+    const savedContent = content
+    const savedName = name
+    setContent('')
+    setSubmitting(true)
+
+    try {
+      const real = await createNote(docId, {
+        content: savedContent.trim(),
+        added_by: savedName.trim(),
+        is_question: isQuestion,
+      })
+      // Replace the optimistic entry with the real one
+      onItemAdded(real, isQuestion, tempId)
+    } catch (err) {
+      // Roll back the optimistic entry and restore the form
+      onItemAdded(null, isQuestion, tempId)
+      setContent(savedContent)
+      setError(err.message || 'Failed to save. Please try again.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Section title={title}>
+      {/* Existing items */}
+      {items.length > 0 && (
+        <div className="space-y-2 mb-3">
+          {items.map((item) => (
+            <div
+              key={item.id}
+              className={`bg-gray-50 rounded-lg px-3 py-2.5 transition-opacity ${
+                item._pending ? 'opacity-50' : ''
+              }`}
+            >
+              <p className="text-sm text-gray-700">{item.content}</p>
+              <p className="text-xs text-gray-400 mt-1">
+                {item.added_by} · {formatDate(item.added_at)}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add form */}
+      <form onSubmit={handleSubmit} className="space-y-2">
+        <textarea
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          placeholder={isQuestion ? 'Add a question…' : 'Add a note…'}
+          rows={2}
+          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm
+            focus:outline-none focus:ring-2 focus:ring-gray-900/10 resize-none"
+        />
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Your name"
+            className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm
+              focus:outline-none focus:ring-2 focus:ring-gray-900/10"
+          />
+          <button
+            type="submit"
+            disabled={submitting || !content.trim()}
+            className="px-3 py-1.5 bg-gray-900 text-white text-sm rounded-lg
+              hover:bg-gray-800 transition-colors disabled:opacity-40"
+          >
+            {submitting ? '…' : 'Add'}
+          </button>
+        </div>
+        {error && <p className="text-xs text-red-500">{error}</p>}
+      </form>
+    </Section>
+  )
+}
+
 export default function DetailPanel({ doc, onClose }) {
-  const [notes, setNotes] = useState({ notes: [], questions: [] })
+  const [noteItems, setNoteItems] = useState([])
+  const [questionItems, setQuestionItems] = useState([])
 
   useEffect(() => {
     if (!doc || doc.status !== 'done') {
-      setNotes({ notes: [], questions: [] })
+      setNoteItems([])
+      setQuestionItems([])
       return
     }
     getNotes(doc.id)
-      .then(setNotes)
+      .then(({ notes, questions }) => {
+        setNoteItems(notes)
+        setQuestionItems(questions)
+      })
       .catch(() => {})
   }, [doc?.id, doc?.status])
+
+  // Handles optimistic adds and rollbacks for both lists
+  const handleItemAdded = (item, isQuestion, replaceId) => {
+    const setter = isQuestion ? setQuestionItems : setNoteItems
+    setter((prev) => {
+      if (!item) {
+        // Rollback: remove the temp entry
+        return prev.filter((i) => i.id !== replaceId)
+      }
+      if (replaceId) {
+        // Replace temp with confirmed item from server
+        return prev.map((i) => (i.id === replaceId ? item : i))
+      }
+      // New optimistic entry
+      return [...prev, item]
+    })
+  }
 
   const topicChips = doc?.categories?.filter((c) => c.type === 'topic') ?? []
   const useCaseChips = doc?.categories?.filter((c) => c.type === 'use_case') ?? []
@@ -106,7 +231,7 @@ export default function DetailPanel({ doc, onClose }) {
                   </div>
                 )}
 
-                {/* Chips */}
+                {/* Category chips */}
                 {(topicChips.length > 0 || useCaseChips.length > 0) && (
                   <div className="flex flex-wrap gap-1.5">
                     {topicChips.map((c) => (
@@ -161,23 +286,23 @@ export default function DetailPanel({ doc, onClose }) {
                   </Section>
                 )}
 
-                {/* Team notes (read-only Phase 2) */}
-                <Section title="Team notes">
-                  {notes.notes.length === 0 ? (
-                    <p className="text-sm text-gray-400 italic">No notes yet.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {notes.notes.map((note) => (
-                        <div key={note.id} className="bg-gray-50 rounded-lg px-3 py-2.5">
-                          <p className="text-sm text-gray-700">{note.content}</p>
-                          <p className="text-xs text-gray-400 mt-1">
-                            {note.added_by} · {formatDate(note.added_at)}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </Section>
+                {/* Team notes */}
+                <NoteSection
+                  docId={doc.id}
+                  title="Team notes"
+                  isQuestion={false}
+                  items={noteItems}
+                  onItemAdded={handleItemAdded}
+                />
+
+                {/* Team questions */}
+                <NoteSection
+                  docId={doc.id}
+                  title="Team questions"
+                  isQuestion={true}
+                  items={questionItems}
+                  onItemAdded={handleItemAdded}
+                />
 
                 {/* Explore more placeholder */}
                 <button
