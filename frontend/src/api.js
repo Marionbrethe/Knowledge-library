@@ -53,3 +53,10 @@ export const createNote = (docId, data) =>
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   }).then(handle)
+
+export const queryLibrary = (data) =>
+  fetch(`${BASE}/query`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }).then(handle)
