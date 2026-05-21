@@ -11,6 +11,12 @@ class CategoryCreate(BaseModel):
     name: str
     type: str  # 'topic' | 'use_case'
     created_by: str
+    description: Optional[str] = None
+
+
+class CategoryUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
 
 
 class CategoryResponse(BaseModel):
@@ -19,6 +25,7 @@ class CategoryResponse(BaseModel):
     type: str
     created_by: str
     created_at: datetime
+    description: Optional[str] = None
 
     model_config = {"from_attributes": True}
 

@@ -6,7 +6,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 
 from database import get_db
-from models.schemas import CategoryCreate, CategoryResponse
+from models.schemas import CategoryCreate, CategoryResponse, CategoryUpdate
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/categories", tags=["categories"])
@@ -54,9 +54,29 @@ async def create_category(payload: CategoryCreate):
         "type": payload.type,
         "created_by": payload.created_by,
         "created_at": datetime.now(timezone.utc).isoformat(),
+        "description": payload.description,
     }
     result = db.table("categories").insert(row).execute()
     if not result.data:
         raise HTTPException(status_code=500, detail="Failed to create category")
+
+    return CategoryResponse(**result.data[0])
+
+
+@router.patch("/{category_id}", response_model=CategoryResponse, summary="Update a category's name or description")
+async def update_category(category_id: str, payload: CategoryUpdate):
+    db = get_db()
+
+    existing = db.table("categories").select("*").eq("id", category_id).execute()
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Category not found")
+
+    updates = payload.model_dump(exclude_none=True)
+    if not updates:
+        return CategoryResponse(**existing.data[0])
+
+    result = db.table("categories").update(updates).eq("id", category_id).execute()
+    if not result.data:
+        raise HTTPException(status_code=500, detail="Failed to update category")
 
     return CategoryResponse(**result.data[0])

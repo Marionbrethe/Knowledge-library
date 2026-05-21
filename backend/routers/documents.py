@@ -19,7 +19,7 @@ router = APIRouter(prefix="/documents", tags=["documents"])
 _SELECT_COLS = (
     "id, url, file_path, title, summary, tension, relevance_score, relevance_reason, "
     "next_steps, auto_questions, status, source_document_id, uploaded_by, uploaded_at, "
-    "document_categories(categories(id, name, type, created_by, created_at))"
+    "document_categories(categories(id, name, type, description, created_by, created_at))"
 )
 
 
@@ -60,15 +60,15 @@ async def _run_classification(
             raise ValueError("No content source")
 
         # 2. Get live category lists to inject into the classifier prompt
-        cat_rows = db.table("categories").select("id, name, type").execute().data
-        topic_names = [c["name"] for c in cat_rows if c["type"] == "topic"]
-        use_case_names = [c["name"] for c in cat_rows if c["type"] == "use_case"]
+        cat_rows = db.table("categories").select("id, name, type, description").execute().data
+        topic_dicts = [{"name": c["name"], "description": c.get("description") or ""} for c in cat_rows if c["type"] == "topic"]
+        use_case_dicts = [{"name": c["name"], "description": c.get("description") or ""} for c in cat_rows if c["type"] == "use_case"]
 
         # 3. Classify with Claude
         result = await classify_document(
             content,
-            existing_topic_categories=topic_names or None,
-            existing_use_case_tags=use_case_names or None,
+            existing_topic_categories=topic_dicts or None,
+            existing_use_case_tags=use_case_dicts or None,
         )
 
         update: dict = {
