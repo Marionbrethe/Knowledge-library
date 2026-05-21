@@ -6,6 +6,7 @@ import DocumentCard from './components/DocumentCard'
 import DetailPanel from './components/DetailPanel'
 import AddDocumentModal from './components/AddDocumentModal'
 import BulkImportModal from './components/BulkImportModal'
+import AskTab from './components/AskTab'
 
 const TABS = ['library', 'ask', 'explore']
 const TAB_LABELS = { library: 'Library', ask: 'Ask', explore: 'Explore' }
@@ -242,9 +243,10 @@ export default function App() {
       )}
 
       {activeTab === 'ask' && (
-        <div className="max-w-2xl mx-auto px-4 py-24 text-center">
-          <p className="text-gray-400">Ask the Library — coming in Phase 4</p>
-        </div>
+        <AskTab
+          documents={documents}
+          onDocumentSelect={setSelectedDoc}
+        />
       )}
 
       {activeTab === 'explore' && (
