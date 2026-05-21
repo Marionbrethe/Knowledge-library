@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
-import { getDocuments, getCategories } from './api'
+import { getDocuments, getCategories, getMonitoringCount } from './api'
 import TopBar from './components/TopBar'
 import FilterSidebar from './components/FilterSidebar'
 import DocumentCard from './components/DocumentCard'
@@ -8,9 +8,10 @@ import AddDocumentModal from './components/AddDocumentModal'
 import BulkImportModal from './components/BulkImportModal'
 import AskTab from './components/AskTab'
 import CategoriesTab from './components/CategoriesTab'
+import MonitoringTab from './components/MonitoringTab'
 
-const TABS = ['library', 'ask', 'categories', 'explore']
-const TAB_LABELS = { library: 'Library', ask: 'Ask', categories: 'Categories', explore: 'Explore' }
+const TABS = ['library', 'ask', 'monitoring', 'categories', 'explore']
+const TAB_LABELS = { library: 'Library', ask: 'Ask', monitoring: 'Monitoring', categories: 'Categories', explore: 'Explore' }
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('library')
@@ -19,6 +20,7 @@ export default function App() {
   const [useCaseCategories, setUseCaseCategories] = useState([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(null)
+  const [newArticleCount, setNewArticleCount] = useState(0)
 
   // Filters
   const [selectedCategory, setSelectedCategory] = useState(null)
@@ -54,7 +56,10 @@ export default function App() {
     }
   }, [])
 
-  useEffect(() => { loadAll() }, [loadAll])
+  useEffect(() => {
+    loadAll()
+    getMonitoringCount().then(({ count }) => setNewArticleCount(count)).catch(() => {})
+  }, [loadAll])
 
   // Poll every 5 s while any document is pending/processing
   useEffect(() => {
@@ -150,13 +155,18 @@ export default function App() {
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors ${
+                className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors inline-flex items-center ${
                   activeTab === tab
                     ? 'border-gray-900 text-gray-900'
                     : 'border-transparent text-gray-400 hover:text-gray-700'
                 }`}
               >
                 {TAB_LABELS[tab]}
+                {tab === 'monitoring' && newArticleCount > 0 && (
+                  <span className="ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] text-[10px] font-semibold bg-amber-400 text-white rounded-full px-1">
+                    {newArticleCount}
+                  </span>
+                )}
               </button>
             ))}
           </nav>
@@ -252,6 +262,13 @@ export default function App() {
         <AskTab
           documents={documents}
           onDocumentSelect={setSelectedDoc}
+        />
+      )}
+
+      {activeTab === 'monitoring' && (
+        <MonitoringTab
+          onCountChange={setNewArticleCount}
+          onDocumentAdded={handleDocumentAdded}
         />
       )}
 
