@@ -269,7 +269,12 @@ export default function App() {
         </div>
       )}
 
-      <DetailPanel doc={selectedDoc} onClose={() => setSelectedDoc(null)} />
+      <DetailPanel
+        doc={selectedDoc}
+        documents={documents}
+        onClose={() => setSelectedDoc(null)}
+        onDocumentAdded={handleDocumentAdded}
+      />
 
       {showAddModal && (
         <AddDocumentModal
