@@ -77,3 +77,32 @@ export const queryLibrary = (data) =>
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   }).then(handle)
+
+export const getMonitoringSources = () => fetch(`${BASE}/monitoring/sources`).then(handle)
+
+export const addMonitoringSource = (data) =>
+  fetch(`${BASE}/monitoring/sources`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }).then(handle)
+
+export const deleteMonitoringSource = (id) =>
+  fetch(`${BASE}/monitoring/sources/${id}`, { method: 'DELETE' }).then((res) => {
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  })
+
+export const checkMonitoringSources = () =>
+  fetch(`${BASE}/monitoring/sources/check`, { method: 'POST' }).then(handle)
+
+export const getMonitoringArticles = () => fetch(`${BASE}/monitoring/articles`).then(handle)
+
+export const getMonitoringCount = () => fetch(`${BASE}/monitoring/articles/count`).then(handle)
+
+export const dismissArticle = (id) =>
+  fetch(`${BASE}/monitoring/articles/${id}/dismiss`, { method: 'PATCH' }).then((res) => {
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  })
+
+export const addArticleToLibrary = (id) =>
+  fetch(`${BASE}/monitoring/articles/${id}/add-to-library`, { method: 'POST' }).then(handle)
