@@ -19,7 +19,7 @@ router = APIRouter(prefix="/documents", tags=["documents"])
 _SELECT_COLS = (
     "id, url, file_path, title, summary, tension, relevance_score, relevance_reason, "
     "next_steps, auto_questions, status, source_document_id, uploaded_by, uploaded_at, "
-    "document_categories(categories(id, name, type, description, created_by, created_at))"
+    "document_categories(categories(id, name, type, created_by, created_at))"
 )
 
 
