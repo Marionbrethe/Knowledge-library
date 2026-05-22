@@ -277,6 +277,7 @@ export default function App() {
           topicCategories={topicCategories}
           useCaseCategories={useCaseCategories}
           onCategoryUpdated={handleCategoryUpdated}
+          onCategoryCreated={handleCategoryCreated}
         />
       )}
 
